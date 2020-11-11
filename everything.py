@@ -4,6 +4,8 @@ Everything is required to run in the background.
 
 documentation   : https://www.voidtools.com/support/everything/sdk/
 dependency (SDK): https://www.voidtools.com/Everything-SDK.zip
+
+https://github.com/flipeador/Python-EveryThing-SDK
 """
 import os
 import ctypes
