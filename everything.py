@@ -4,53 +4,54 @@ Everything is required to run in the background.
 
 documentation   : https://www.voidtools.com/support/everything/sdk/
 dependency (SDK): https://www.voidtools.com/Everything-SDK.zip
-
-https://github.com/flipeador/Python-EveryThing-SDK
 """
-import os
-import ctypes
-from ctypes.wintypes import *
-import struct
+import os, ctypes
 import datetime as dt
 from typing import Final
+from enum import Enum, IntEnum
+from ctypes.wintypes import *
+from struct import calcsize, unpack
 
-EVERYTHING_MAX_PATH: Final = 32767
+MAX_PATH: Final = 32767
 
-EVERYTHING_REQUEST_FILE_NAME                          : Final = 0x00000001
-EVERYTHING_REQUEST_PATH                               : Final = 0x00000002
-EVERYTHING_REQUEST_FULL_PATH_AND_FILE_NAME            : Final = 0x00000004
-EVERYTHING_REQUEST_EXTENSION                          : Final = 0x00000008
-EVERYTHING_REQUEST_SIZE                               : Final = 0x00000010
-EVERYTHING_REQUEST_DATE_CREATED                       : Final = 0x00000020
-EVERYTHING_REQUEST_DATE_MODIFIED                      : Final = 0x00000040
-EVERYTHING_REQUEST_DATE_ACCESSED                      : Final = 0x00000080
-EVERYTHING_REQUEST_ATTRIBUTES                         : Final = 0x00000100
-EVERYTHING_REQUEST_FILE_LIST_FILE_NAME                : Final = 0x00000200
-EVERYTHING_REQUEST_RUN_COUNT                          : Final = 0x00000400
-EVERYTHING_REQUEST_DATE_RUN                           : Final = 0x00000800
-EVERYTHING_REQUEST_DATE_RECENTLY_CHANGED              : Final = 0x00001000
-EVERYTHING_REQUEST_HIGHLIGHTED_FILE_NAME              : Final = 0x00002000
-EVERYTHING_REQUEST_HIGHLIGHTED_PATH                   : Final = 0x00004000
-EVERYTHING_REQUEST_HIGHLIGHTED_FULL_PATH_AND_FILE_NAME: Final = 0x00008000
-EVERYTHING_REQUEST_ALL                                : Final = 0x0000FFFF
+class Request(IntEnum):
+    FileName                      : Final = 0x00000001
+    Path                          : Final = 0x00000002
+    FullPathAndFileName           : Final = 0x00000004
+    Extension                     : Final = 0x00000008
+    Size                          : Final = 0x00000010
+    DateCreated                   : Final = 0x00000020
+    DateModified                  : Final = 0x00000040
+    DateAccessed                  : Final = 0x00000080
+    Attributes                    : Final = 0x00000100
+    FileListFileName              : Final = 0x00000200
+    RunCount                      : Final = 0x00000400
+    DateRun                       : Final = 0x00000800
+    DateRecentlyChanged           : Final = 0x00001000
+    HighlightedFileName           : Final = 0x00002000
+    HighlightedPath               : Final = 0x00004000
+    HighlightedFullPathAndFileName: Final = 0x00008000
+    All                           : Final = 0x0000FFFF
 
-EVERYTHING_OK                   : Final = 0  # The operation completed successfully.
-EVERYTHING_ERROR_MEMORY         : Final = 1  # Failed to allocate memory for the search query.
-EVERYTHING_ERROR_IPC            : Final = 2  # IPC is not available.
-EVERYTHING_ERROR_REGISTERCLASSEX: Final = 3  # Failed to register the search query window class.
-EVERYTHING_ERROR_CREATEWINDOW   : Final = 4  # Failed to create the search query window.
-EVERYTHING_ERROR_CREATETHREAD   : Final = 5  # Failed to create the search query thread.
-EVERYTHING_ERROR_INVALIDINDEX   : Final = 6  # Invalid index. The index must be greater or equal to 0 and less than the number of visible results.
-EVERYTHING_ERROR_INVALIDCALL    : Final = 7  # Invalid call.
+class Error(Enum):
+    Ok             : Final = 0  # The operation completed successfully.
+    Memory         : Final = 1  # Failed to allocate memory for the search query.
+    IPC            : Final = 2  # IPC is not available.
+    RegisterClassEx: Final = 3  # Failed to register the search query window class.
+    CreateWindow   : Final = 4  # Failed to create the search query window.
+    CreateThread   : Final = 5  # Failed to create the search query thread.
+    InvalidIndex   : Final = 6  # Invalid index. The index must be greater or equal to 0 and less than the number of visible results.
+    InvalidCall    : Final = 7  # Invalid call.
 
 class Everything:
-    """
-    Loads the EveryThing library into the address space of the calling process.
-    :param dll: SDK\dll\Everything(32|64).dll
-    """
     def __init__(self, dll=None):
-        if dll is None:
-            dll = f"{os.environ['ProgramFiles']}\\Everything\\SDK\\DLL\\Everything{8*struct.calcsize('P')}.dll"
+        """
+        Loads the EveryThing library into the address space of the calling process.
+        :param dll: EveryThing SDK ('SDK\dll\Everything(32|64).dll')
+        """
+        dll = dll or r'{}\Everything\SDK\DLL\Everything{}.dll'\
+            .format(os.environ['ProgramFiles'], 8*calcsize('P'))
+
         self.dll = ctypes.WinDLL(dll)
 
         self.set_args('QueryW', BOOL, BOOL)
@@ -95,7 +96,7 @@ class Everything:
         """
         self.SetRegex(enabled)
 
-    def set_request_flags(self, flags):
+    def set_request_flags(self, flags:Request):
         """
         Sets the desired result data.
         It is possible the requested data is not available, in which case after you have received your
@@ -108,69 +109,105 @@ class Everything:
         Gets the flags of available result data.
         The requested result data may differ to the desired result data specified in ``set_request_flags``.
         """
-        return self.GetResultListRequestFlags()
+        return Request(self.GetResultListRequestFlags())
 
-    def get_result(self, index):
+    def get_filename(self, *, index=None):
         """
         Gets the full path and file name of a visible result.
-        :param index: Zero based index of the visible result.
         :return: Returns a string if successful, otherwise returns None.
         """
-        filename = ctypes.create_unicode_buffer(EVERYTHING_MAX_PATH)
-        if self.GetResultFullPathNameW(index, filename, EVERYTHING_MAX_PATH):
+        filename = ctypes.create_unicode_buffer(MAX_PATH)
+        if self.GetResultFullPathNameW(self._index(index), filename, MAX_PATH):
             return ctypes.wstring_at(filename)
         return None
 
-    def get_result_count(self):
+    def get_count(self):
         """
         Gets the number of visible file and folder results.
         """
         return self.GetNumResults()
 
-    def get_result_size(self, index):
+    def get_size(self, *, index=None):
         """
         Gets the size of a visible result.
-        :param index: Zero based index of the visible result.
         :return: Returns the size if successful, otherwise returns None.
         """
-        file_size = LARGE_INTEGER(1)
-        if self.GetResultSize(index, file_size):
+        file_size = ULARGE_INTEGER(1)
+        if self.GetResultSize(self._index(index), file_size):
             return file_size.value
         return None
 
-    def get_result_date(self, index, tdate):
+    def get_date_accessed(self, *, index=None):
         """
-        Gets the date of a visible result.
-        :param index: Zero based index of the visible result.
-        :param tdate: Accessed/Created/Modified/RecentlyChanged/Run.
-        :return: Returns datetime if successful, otherwise returns None.
+        Gets the accessed date of the visible result.
         """
-        filetime_date = ULARGE_INTEGER(1)
-        if self(f'GetResultDate{tdate}', index, filetime_date):
-            winticks = int(struct.unpack('<Q', filetime_date)[0])
-            return dt.datetime.fromtimestamp((winticks - 116444736000000000) / 10000000)
-        return None
+        return self.get_result_date(self._index(index), 'Accessed')
 
-    def is_file_result(self, index):
+    def get_date_created(self, *, index=None):
+        """
+        Gets the created date of the visible result.
+        """
+        return self.get_result_date(self._index(index), 'Created')
+
+    def get_date_modified(self, *, index=None):
+        """
+        Gets the modified date of the visible result.
+        """
+        return self._get_result_date(self._index(index), 'Modified')
+
+    def get_date_recently_changed(self, *, index=None):
+        """
+        Gets the recently changed date of the visible result.
+        """
+        return self._get_result_date(self._index(index), 'RecentlyChanged')
+
+    def get_date_run(self, *, index=None):
+        """
+        Gets the run date of the visible result.
+        """
+        return self._get_result_date(self._index(index), 'Run')
+
+    def is_file(self, *, index=None):
         """
         Determines if the visible result is a file.
         """
-        return bool(self.IsFileResult(index))
+        return bool(self.IsFileResult(self._index(index)))
 
-    def is_folder_result(self, index):
+    def is_folder(self, *, index=None):
         """
         Determines if the visible result is a folder.
         """
-        return bool(self.IsFolderResult(index))
+        return bool(self.IsFolderResult(self._index(index)))
 
     def get_last_error(self):
         """
         Gets the last-error code value.
         """
-        return self.GetLastError()
+        return Error(self.GetLastError())
+
+    def _index(self, index):
+        return self.index if index is None else index
+
+    def _get_result_date(self, index, tdate):
+        filetime_date = ULARGE_INTEGER(1)
+        if self(f'GetResultDate{tdate}', index, filetime_date):
+            winticks = int(unpack('<Q', filetime_date)[0])
+            return dt.datetime.fromtimestamp((winticks - 116444736000000000) / 10000000)
+        return None
 
     def __getattr__(self, item):
         return getattr(self.dll, f'Everything_{item}')
 
     def __call__(self, name, *args):
         return getattr(self.dll, f'Everything_{name}')(*args)
+
+    def __iter__(self):
+        self.index = -1
+        self.count = self.get_count()
+        return self
+
+    def __next__(self):
+        self.index += 1
+        if self.index < self.count:
+            return self
+        raise StopIteration
