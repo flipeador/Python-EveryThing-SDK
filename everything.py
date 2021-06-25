@@ -15,33 +15,33 @@ from struct import calcsize, unpack
 MAX_PATH: Final = 32767
 
 class Request(IntEnum):
-    FileName                      : Final = 0x00000001
-    Path                          : Final = 0x00000002
-    FullPathAndFileName           : Final = 0x00000004
-    Extension                     : Final = 0x00000008
-    Size                          : Final = 0x00000010
-    DateCreated                   : Final = 0x00000020
-    DateModified                  : Final = 0x00000040
-    DateAccessed                  : Final = 0x00000080
-    Attributes                    : Final = 0x00000100
-    FileListFileName              : Final = 0x00000200
-    RunCount                      : Final = 0x00000400
-    DateRun                       : Final = 0x00000800
-    DateRecentlyChanged           : Final = 0x00001000
-    HighlightedFileName           : Final = 0x00002000
-    HighlightedPath               : Final = 0x00004000
-    HighlightedFullPathAndFileName: Final = 0x00008000
-    All                           : Final = 0x0000FFFF
+    FileName                       = 0x00000001
+    Path                           = 0x00000002
+    FullPathAndFileName            = 0x00000004
+    Extension                      = 0x00000008
+    Size                           = 0x00000010
+    DateCreated                    = 0x00000020
+    DateModified                   = 0x00000040
+    DateAccessed                   = 0x00000080
+    Attributes                     = 0x00000100
+    FileListFileName               = 0x00000200
+    RunCount                       = 0x00000400
+    DateRun                        = 0x00000800
+    DateRecentlyChanged            = 0x00001000
+    HighlightedFileName            = 0x00002000
+    HighlightedPath                = 0x00004000
+    HighlightedFullPathAndFileName = 0x00008000
+    All                            = 0x0000FFFF
 
 class Error(Enum):
-    Ok             : Final = 0  # The operation completed successfully.
-    Memory         : Final = 1  # Failed to allocate memory for the search query.
-    IPC            : Final = 2  # IPC is not available.
-    RegisterClassEx: Final = 3  # Failed to register the search query window class.
-    CreateWindow   : Final = 4  # Failed to create the search query window.
-    CreateThread   : Final = 5  # Failed to create the search query thread.
-    InvalidIndex   : Final = 6  # Invalid index. The index must be greater or equal to 0 and less than the number of visible results.
-    InvalidCall    : Final = 7  # Invalid call.
+    Ok              = 0  # The operation completed successfully.
+    Memory          = 1  # Failed to allocate memory for the search query.
+    IPC             = 2  # IPC is not available.
+    RegisterClassEx = 3  # Failed to register the search query window class.
+    CreateWindow    = 4  # Failed to create the search query window.
+    CreateThread    = 5  # Failed to create the search query thread.
+    InvalidIndex    = 6  # Invalid index. The index must be greater or equal to 0 and less than the number of visible results.
+    InvalidCall     = 7  # Invalid call.
 
 class Everything:
     def __init__(self, dll=None):
