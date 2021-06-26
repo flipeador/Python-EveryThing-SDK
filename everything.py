@@ -43,6 +43,89 @@ class Error(Enum):
     InvalidIndex    = 6  # Invalid index. The index must be greater or equal to 0 and less than the number of visible results.
     InvalidCall     = 7  # Invalid call.
 
+class ItemIterator:
+    def __init__(self, everything, index):
+        self.everything = everything
+        self.index = index
+
+    def __next__(self):
+        self.index += 1
+        if self.index < len(self.everything):
+            return self
+        raise StopIteration
+
+    def __str__(self):
+        return self.get_filename()
+
+    def get_filename(self):
+        """
+        Gets the full path and file name of a visible result.
+        :return: Returns a string if successful, otherwise returns None.
+        """
+        filename = ctypes.create_unicode_buffer(MAX_PATH)
+        if self.everything.GetResultFullPathNameW(self.index, filename, MAX_PATH):
+            return filename.value
+        return None
+
+    def get_size(self):
+        """
+        Gets the size of a visible result.
+        :return: Returns the size if successful, otherwise returns None.
+        """
+        file_size = ULARGE_INTEGER()
+        if self.everything.GetResultSize(self.index, file_size):
+            return file_size.value
+        return None
+
+    def get_date_accessed(self):
+        """
+        Gets the accessed date of the visible result.
+        """
+        return self._get_result_date('Accessed')
+
+    def get_date_created(self):
+        """
+        Gets the created date of the visible result.
+        """
+        return self._get_result_date('Created')
+
+    def get_date_modified(self):
+        """
+        Gets the modified date of the visible result.
+        """
+        return self._get_result_date('Modified')
+
+    def get_date_recently_changed(self):
+        """
+        Gets the recently changed date of the visible result.
+        """
+        return self._get_result_date('RecentlyChanged')
+
+    def get_date_run(self):
+        """
+        Gets the run date of the visible result.
+        """
+        return self._get_result_date('Run')
+
+    def is_file(self):
+        """
+        Determines if the visible result is a file.
+        """
+        return bool(self.everything.IsFileResult(self.index))
+
+    def is_folder(self):
+        """
+        Determines if the visible result is a folder.
+        """
+        return bool(self.everything.IsFolderResult(self.index))
+
+    def _get_result_date(self, tdate):
+        filetime_date = ULARGE_INTEGER()
+        if self.everything(f'GetResultDate{tdate}', self.index, filetime_date):
+            winticks = int(unpack('<Q', filetime_date)[0])
+            return dt.datetime.fromtimestamp((winticks - 116444736000000000) / 10000000)
+        return None
+
 class Everything:
     def __init__(self, dll=None):
         """
@@ -54,27 +137,42 @@ class Everything:
 
         self.dll = ctypes.WinDLL(dll)
 
-        self.set_args('QueryW', BOOL, BOOL)
-        self.set_args('SetSearchW', None, LPCWSTR)
-        self.set_args('SetRegex', None, BOOL)
-        self.set_args('SetRequestFlags', None, DWORD)
-        self.set_args('GetResultListRequestFlags', DWORD)
-        self.set_args('GetResultFullPathNameW', DWORD, DWORD, LPWSTR, DWORD)
-        self.set_args('GetNumResults', DWORD)
-        self.set_args('GetResultSize', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('GetResultDateAccessed', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('GetResultDateCreated', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('GetResultDateModified', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('GetResultDateRecentlyChanged', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('GetResultDateRun', BOOL, DWORD, PULARGE_INTEGER)
-        self.set_args('IsFileResult', BOOL, DWORD)
-        self.set_args('IsFolderResult', BOOL, DWORD)
-        self.set_args('GetLastError', DWORD)
+        self.func(BOOL, 'QueryW', BOOL)
+        self.func(None, 'SetSearchW', LPCWSTR)
+        self.func(None, 'SetRegex', BOOL)
+        self.func(None, 'SetRequestFlags', DWORD)
+        self.func(DWORD, 'GetResultListRequestFlags')
+        self.func(DWORD, 'GetResultFullPathNameW', DWORD, LPWSTR, DWORD)
+        self.func(DWORD, 'GetNumResults')
+        self.func(BOOL, 'GetResultSize', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'GetResultDateAccessed', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'GetResultDateCreated', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'GetResultDateModified', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'GetResultDateRecentlyChanged', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'GetResultDateRun', DWORD, PULARGE_INTEGER)
+        self.func(BOOL, 'IsFileResult', DWORD)
+        self.func(BOOL, 'IsFolderResult', DWORD)
+        self.func(DWORD, 'GetLastError')
 
-    def set_args(self, name, restype, *argtypes):
+    def __len__(self):
+        """
+        Gets the number of visible file and folder results.
+        """
+        return self.GetNumResults()
+
+    def __getattr__(self, item):
+        return getattr(self.dll, f'Everything_{item}')
+
+    def __call__(self, name, *args):
+        return getattr(self.dll, f'Everything_{name}')(*args)
+
+    def __iter__(self):
+        return ItemIterator(self, -1)
+
+    def func(self, restype, name:str, *argtypes):
         func = getattr(self.dll, f'Everything_{name}')
         func.restype = restype
-        func.argtypes = argtypes
+        func.argtypes = tuple(argtypes)
 
     def query(self, wait=True):
         """
@@ -83,13 +181,13 @@ class Everything:
         """
         return bool(self.QueryW(wait))
 
-    def set_search(self, string):
+    def set_search(self, string:str):
         """
         Sets the search string for the IPC Query.
         """
-        self.SetSearchW(string)
+        self.SetSearchW(str(string))
 
-    def set_regex(self, enabled):
+    def set_regex(self, enabled:bool):
         """
         Enables or disables Regular Expression searching.
         :param enabled: True to enable regex, False to disable regex.
@@ -111,103 +209,8 @@ class Everything:
         """
         return Request(self.GetResultListRequestFlags())
 
-    def get_filename(self, *, index=None):
-        """
-        Gets the full path and file name of a visible result.
-        :return: Returns a string if successful, otherwise returns None.
-        """
-        filename = ctypes.create_unicode_buffer(MAX_PATH)
-        if self.GetResultFullPathNameW(self._index(index), filename, MAX_PATH):
-            return ctypes.wstring_at(filename)
-        return None
-
-    def get_count(self):
-        """
-        Gets the number of visible file and folder results.
-        """
-        return self.GetNumResults()
-
-    def get_size(self, *, index=None):
-        """
-        Gets the size of a visible result.
-        :return: Returns the size if successful, otherwise returns None.
-        """
-        file_size = ULARGE_INTEGER(1)
-        if self.GetResultSize(self._index(index), file_size):
-            return file_size.value
-        return None
-
-    def get_date_accessed(self, *, index=None):
-        """
-        Gets the accessed date of the visible result.
-        """
-        return self.get_result_date(self._index(index), 'Accessed')
-
-    def get_date_created(self, *, index=None):
-        """
-        Gets the created date of the visible result.
-        """
-        return self.get_result_date(self._index(index), 'Created')
-
-    def get_date_modified(self, *, index=None):
-        """
-        Gets the modified date of the visible result.
-        """
-        return self._get_result_date(self._index(index), 'Modified')
-
-    def get_date_recently_changed(self, *, index=None):
-        """
-        Gets the recently changed date of the visible result.
-        """
-        return self._get_result_date(self._index(index), 'RecentlyChanged')
-
-    def get_date_run(self, *, index=None):
-        """
-        Gets the run date of the visible result.
-        """
-        return self._get_result_date(self._index(index), 'Run')
-
-    def is_file(self, *, index=None):
-        """
-        Determines if the visible result is a file.
-        """
-        return bool(self.IsFileResult(self._index(index)))
-
-    def is_folder(self, *, index=None):
-        """
-        Determines if the visible result is a folder.
-        """
-        return bool(self.IsFolderResult(self._index(index)))
-
     def get_last_error(self):
         """
         Gets the last-error code value.
         """
         return Error(self.GetLastError())
-
-    def _index(self, index):
-        return self.index if index is None else index
-
-    def _get_result_date(self, index, tdate):
-        filetime_date = ULARGE_INTEGER(1)
-        if self(f'GetResultDate{tdate}', index, filetime_date):
-            winticks = int(unpack('<Q', filetime_date)[0])
-            return dt.datetime.fromtimestamp((winticks - 116444736000000000) / 10000000)
-        return None
-
-    def __getattr__(self, item):
-        return getattr(self.dll, f'Everything_{item}')
-
-    def __call__(self, name, *args):
-        return getattr(self.dll, f'Everything_{name}')(*args)
-
-    def __iter__(self):
-        self.index = -1
-        self.count = self.get_count()
-        return self
-
-    def __next__(self):
-        self.index += 1
-        if self.index < self.count:
-            return self
-        raise StopIteration
