@@ -160,6 +160,13 @@ class Everything:
         """
         return self.GetNumResults()
 
+    def __getitem__(self, item:int):
+        """
+        Gets the result/item ``item``.
+        """
+        assert(0 <= item < len(self)), 'index out of range'
+        return ItemIterator(self, item)
+
     def __getattr__(self, item):
         return getattr(self.dll, f'Everything_{item}')
 
