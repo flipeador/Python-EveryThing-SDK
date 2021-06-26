@@ -2,8 +2,6 @@
 https://www.voidtools.com/support/everything/sdk/
 
 ```py
-from humanize import naturalsize
-
 everything = Everything()
 # sets the search options
 everything.set_search('everything')
@@ -15,7 +13,7 @@ if not everything.query():
 for item in everything:
     print(
         item.get_filename(),
-        f'Size: {naturalsize(item.get_size())}',
+        f'Size: {item.get_size()} Bytes',
         f'Modified date: {item.get_date_modified()}',
         '', sep='\n'
     )
